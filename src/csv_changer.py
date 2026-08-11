@@ -17,6 +17,21 @@ class CSVChanger:
         return df
 
     @staticmethod
+    def replace_zeros(df: pd.DataFrame, column_name: str, remove: bool = False) -> pd.DataFrame:
+        """
+           Replace zero values with the median or remove rows containing zeros.
+        """
+        result = df.copy()
+        if remove:
+            return result.loc[result[column_name] != 0].copy()
+
+        median_value = result.loc[result[column_name] != 0, column_name].median()
+        result.loc[
+            result[column_name] == 0, column_name] = median_value
+
+        return result
+
+    @staticmethod
     def save_data(df: pd.DataFrame, output_path: str, index: bool = False) -> None:
         """
         Saves the cleaned DataFrame to a CSV file.
@@ -45,3 +60,5 @@ class CSVChanger:
         if callable(value):
             return df[df[column].apply(value)]
         return df[df[column] == value]
+
+
