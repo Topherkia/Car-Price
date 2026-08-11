@@ -8,13 +8,19 @@ from sklearn.pipeline import Pipeline
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import root_mean_squared_error, r2_score
 
+from csv_changer import CSVChanger
+
 # 1. LOAD DATA
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 df = pd.read_csv(os.path.join(project_root, "data", "raw", "USA_cars_datasets.csv"))
 
 # 2. FEATURE CLEANING & DROP IDENTIFIERS
 # Drop index, lot, and vin as they don't carry predictive value
-df = df.drop(columns=['Unnamed: 0', 'vin', 'lot'], errors='ignore')
+unwanted_cols = ['Unnamed: 0', 'vin', 'lot']
+df = CSVChanger.load_and_clean_columns(
+    file_path="data/raw/USA_cars_datasets.csv", 
+    columns_to_drop=['Unnamed: 0', 'vin', 'lot']
+)
 
 # Strip leading/trailing whitespaces in string columns
 str_cols = df.select_dtypes(include=['object']).columns
