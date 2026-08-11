@@ -15,19 +15,53 @@ class CSVChanger:
             df = df.drop(columns=columns_to_drop, errors='ignore')
             
         return df
-
-    @staticmethod
-    def replace_zeros(df: pd.DataFrame, column_name: str, remove: bool = False) -> pd.DataFrame:
+      
+      @staticmethod
+      def drop_invalid_rows(df: pd.DataFrame, column: str, invalid_values: list = [0, np.nan]) -> pd.DataFrame:
         """
-           Replace zero values with the median or remove rows containing zeros.
+        Removes rows where a specific column contains invalid values (e.g., price = 0 or NaN).
+        
+        Parameters:
+        -----------
+        df : pd.DataFrame
+        column : str
+            Column to filter (e.g., 'price').
+        invalid_values : list
+            List of values considered invalid.
+        """
+        df_cleaned = df.copy()
+        
+        # Filter out NaNs if included in invalid_values
+        if any(pd.isna(v) for v in invalid_values):
+            df_cleaned = df_cleaned.dropna(subset=[column])
+            invalid_values = [v for v in invalid_values if not pd.isna(v)]
+            
+        # Filter out remaining scalar invalid values (e.g., 0)
+        if invalid_values:
+            df_cleaned = df_cleaned[~df_cleaned[column].isin(invalid_values)]
+            
+        return df_cleaned
+     
+    @staticmethod
+    def replace_values(df: pd.DataFrame, 
+        column: str, 
+        invalid_values: list = [0, np.nan], 
+        strategy: str = 'median', 
+        group_by: str = None
+    ) -> pd.DataFrame:
+        """
+           Replace zero values with the median or mean.
         """
         result = df.copy()
-        if remove:
-            return result.loc[result[column_name] != 0].copy()
-
-        median_value = result.loc[result[column_name] != 0, column_name].median()
-        result.loc[
-            result[column_name] == 0, column_name] = median_value
+        for val in invalid_values:
+            if pd.isna(val):
+                continue
+            result[column] = result[column].replace(val, np.nan)
+            if group_by and group_by in result.columns:
+            if strategy == 'mean':
+                result[column] = result.groupby(group_by)[column].transform(lambda x: x.fillna(x.mean()))
+            elif strategy == 'median':
+                result[column] = result.groupby(group_by)[column].transform(lambda x: x.fillna(x.median()))
 
         return result
 
