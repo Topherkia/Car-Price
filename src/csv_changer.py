@@ -24,8 +24,6 @@ class CSVChanger:
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         df.to_csv(os.path.join(project_root, output_path), index=index)
 
-    # ------------------ NEW METHODS ------------------ #
-
     @staticmethod
     def find_rows(df: pd.DataFrame, column: str, value) -> pd.DataFrame:
         """
