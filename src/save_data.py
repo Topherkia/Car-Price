@@ -47,7 +47,7 @@ def process_car_prices(project_path: str, file_name: str) -> None:
     # 2. Prepare output directory and filename
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     base_name = os.path.splitext(file_name)[0]
-    output_file_name = f"{base_name}_{strategy}_{timestamp}.csv"
+    output_file_name = f"{base_name}_{strategy}.csv"
 
     output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "processed")
     os.makedirs(output_dir, exist_ok=True)
