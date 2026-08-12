@@ -1,6 +1,9 @@
 import pandas as pd
 import numpy as np
 import os
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_absolute_error, r2_score
 
 class CSVChanger:
     @staticmethod
@@ -16,8 +19,8 @@ class CSVChanger:
             
         return df
       
-      @staticmethod
-      def drop_invalid_rows(df: pd.DataFrame, column: str, invalid_values: list = [0, np.nan]) -> pd.DataFrame:
+    @staticmethod
+    def drop_invalid_rows(df: pd.DataFrame, column: str, invalid_values: list = [0, np.nan]) -> pd.DataFrame:
         """
         Removes rows where a specific column contains invalid values (e.g., price = 0 or NaN).
         
@@ -58,10 +61,10 @@ class CSVChanger:
                 continue
             result[column] = result[column].replace(val, np.nan)
             if group_by and group_by in result.columns:
-            if strategy == 'mean':
-                result[column] = result.groupby(group_by)[column].transform(lambda x: x.fillna(x.mean()))
-            elif strategy == 'median':
-                result[column] = result.groupby(group_by)[column].transform(lambda x: x.fillna(x.median()))
+                if strategy == 'mean':
+                    result[column] = result.groupby(group_by)[column].transform(lambda x: x.fillna(x.mean()))
+                elif strategy == 'median':
+                    result[column] = result.groupby(group_by)[column].transform(lambda x: x.fillna(x.median()))
 
         return result
 
@@ -96,6 +99,48 @@ class CSVChanger:
         return df[df[column] == value]
 
     @staticmethod
+    def linear_regression(df: pd.DataFrame, target_column: str,  test_size: float = 0.2,
+        random_state: int | None = 42):
+
+        """
+           Trains a linear regression model on the given DataFrame and evaluates it.
+
+           Parameters
+           ----------
+           df : pd.DataFrame
+           target_column : str
+               Name of the column to use as the target variable.
+           test_size : float, optional
+               Proportion of the dataset to include in the test split (default is 0.2).
+           random_state : int or None, optional
+               Random seed used by train_test_split for reproducible splits (default is 42).
+
+           Returns
+           -------
+           model : sklearn.linear_model.LinearRegression
+               Fitted linear regression model.
+           metrics : dict
+               Dictionary with evaluation metrics on the test set
+               (e.g., {"MAE": float, "R2": float}).
+           """
+
+        x = df.drop(columns=[target_column])
+        y = df[target_column]
+
+        x_train, x_test, y_train, y_test = train_test_split(
+            x, y, test_size=test_size, random_state=random_state
+        )
+        model = LinearRegression()
+        model.fit(x_train, y_train)
+        y_pred = model.predict(x_test)
+
+        mae = mean_absolute_error(y_test, y_pred)
+        r2 = r2_score(y_test, y_pred)
+        metrics = {"MAE": mae, "R2": r2}
+
+        return model, metrics
+      
+    @staticmethod 
     def calculate_mean(
         df: pd.DataFrame, column: str, exclude_value: float = None
     ) -> float:
