@@ -6,6 +6,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.tree import DecisionTreeRegressor
 from sklearn.metrics import root_mean_squared_error, r2_score
 
 # Step 1: Load Data
@@ -40,7 +41,8 @@ X_train, X_test, y_train, y_test = train_test_split(
 # Step 6: Define Regressors
 regressors = {
     "Linear Regression": LinearRegression(),
-    "Random Forest Regressor": RandomForestRegressor(n_estimators=100, random_state=42)
+    "Random Forest Regressor": RandomForestRegressor(n_estimators=100, random_state=42),
+    "Decision Tree Regressor": DecisionTreeRegressor(random_state=42)
 }
 
 # Step 7: Train and Compare Models
