@@ -102,6 +102,28 @@ class CSVChanger:
     def linear_regression(df: pd.DataFrame, target_column: str,  test_size: float = 0.2,
         random_state: int | None = 42):
 
+        """
+           Trains a linear regression model on the given DataFrame and evaluates it.
+
+           Parameters
+           ----------
+           df : pd.DataFrame
+           target_column : str
+               Name of the column to use as the target variable.
+           test_size : float, optional
+               Proportion of the dataset to include in the test split (default is 0.2).
+           random_state : int or None, optional
+               Random seed used by train_test_split for reproducible splits (default is 42).
+
+           Returns
+           -------
+           model : sklearn.linear_model.LinearRegression
+               Fitted linear regression model.
+           metrics : dict
+               Dictionary with evaluation metrics on the test set
+               (e.g., {"MAE": float, "R2": float}).
+           """
+
         x = df.drop(columns=[target_column])
         y = df[target_column]
 
