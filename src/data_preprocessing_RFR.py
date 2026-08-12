@@ -1,78 +1,63 @@
-import pandas as pd
-import numpy as np
 import os
+import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
+from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import root_mean_squared_error, r2_score
 
-from csv_changer import CSVChanger
-
-# 1. LOAD DATA
+# Step 1: Load Data
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 df = pd.read_csv(os.path.join(project_root, "data", "processed", "USA_cars_datasets_removed.csv"))
 
-# 2. FEATURE CLEANING & DROP IDENTIFIERS
-# Drop index, lot, and vin as they don't carry predictive value
-unwanted_cols = ['Unnamed: 0', 'vin', 'lot']
-df = CSVChanger.load_and_clean_columns(
-    file_path="data/processed/USA_cars_datasets_removed.csv", 
-    columns_to_drop=['Unnamed: 0', 'vin', 'lot']
-)
-
-# Strip leading/trailing whitespaces in string columns
-str_cols = df.select_dtypes(include=['object']).columns
-for col in str_cols:
-    df[col] = df[col].str.strip()
-
-# Calculate 'car_age' based on current year
+# Step 2: Clean Features
 current_year = int(pd.Timestamp.now().year)
 df['car_age'] = current_year - df['year']
-df = df.drop(columns=['year'])
+df = df.drop(columns=['Unnamed: 0', 'vin', 'lot', 'year', 'condition'])
 
-# 3. DEFINE FEATURE GROUPS FOR ENCODING
-X = df.drop(columns=['price', 'condition']) # Drop 'condition' (auction time remaining)
+# Step 3: Define Features and Target
+X = df.drop(columns=['price'])
 y = df['price']
 
-# Numerical features to scale
 num_features = ['mileage', 'car_age']
+cat_features = ['brand', 'title_status', 'country', 'color', 'state', 'model']
 
-# Categorical features for One-Hot Encoding (Low-to-Medium Cardinality)
-cat_features = ['brand', 'title_status', 'country', 'color', 'state']
-
-# High-cardinality categorical features (e.g., 'model' has 127 unique values)
-# OneHotEncoder with handle_unknown='infrequent_if_exist' or min_frequency automatically groups rare models
-cat_transformer = OneHotEncoder(
-    handle_unknown='infrequent_if_exist', 
-    min_frequency=10, 
-    sparse_output=False
-)
-
-# 4. BUILD PREPROCESSING PIPELINE
+# Step 4: Setup Preprocessing Pipeline
 preprocessor = ColumnTransformer(
     transformers=[
         ('num', StandardScaler(), num_features),
-        ('cat', cat_transformer, cat_features + ['model'])
+        ('cat', OneHotEncoder(handle_unknown='infrequent_if_exist', min_frequency=10, sparse_output=False), cat_features)
     ]
 )
 
-# 5. TRAIN / TEST SPLIT
+# Step 5: Split Data
 X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.2, random_state=42
 )
 
-# 6. COMBINE PREPROCESSING & MODEL INTO A PIPELINE
-model_pipeline = Pipeline(steps=[
-    ('preprocessor', preprocessor),
-    ('regressor', RandomForestRegressor(n_estimators=100, random_state=42))
-])
+# Step 6: Define Regressors
+regressors = {
+    "Linear Regression": LinearRegression(),
+    "Random Forest Regressor": RandomForestRegressor(n_estimators=100, random_state=42)
+}
 
-# 7. TRAIN AND EVALUATE
-model_pipeline.fit(X_train, y_train)
-y_pred = model_pipeline.predict(X_test)
-
-print("=== Model Performance ===")
-print(f"R2 Score: {r2_score(y_test, y_pred):.4f}")
-print(f"RMSE: ${root_mean_squared_error(y_test, y_pred):.2f}")
+# Step 7: Train and Compare Models
+for name, model in regressors.items():
+    pipeline = Pipeline(steps=[
+        ('preprocessor', preprocessor),
+        ('regressor', model)
+    ])
+    
+    # Train
+    pipeline.fit(X_train, y_train)
+    
+    # Predict & Evaluate
+    y_pred = pipeline.predict(X_test)
+    r2 = r2_score(y_test, y_pred)
+    rmse = root_mean_squared_error(y_test, y_pred)
+    
+    print(f"=== {name} Performance ===")
+    print(f"R2 Score: {r2:.4f}")
+    print(f"RMSE: ${rmse:.2f}\n")
