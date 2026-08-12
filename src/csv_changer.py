@@ -139,4 +139,21 @@ class CSVChanger:
         metrics = {"MAE": mae, "R2": r2}
 
         return model, metrics
+      
+    @staticmethod 
+    def calculate_mean(
+        df: pd.DataFrame, column: str, exclude_value: float = None
+    ) -> float:
+        """Calculates the mean of a column, optionally excluding a specific value (e.g., 0)."""
+        if exclude_value is not None:
+            return df[df[column] != exclude_value][column].mean()
+        return df[column].mean()
 
+    @staticmethod
+    def calculate_median(
+        df: pd.DataFrame, column: str, exclude_value: float = None
+    ) -> float:
+        """Calculates the median of a column, optionally excluding a specific value (e.g., 0)."""
+        if exclude_value is not None:
+            return df[df[column] != exclude_value][column].median()
+        return df[column].median()
