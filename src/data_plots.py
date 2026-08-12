@@ -2,10 +2,10 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Define file name
-file_name = 'USA_cars_datasets.csv'
+file_name = 'USA_cars_datasets_processed_removed_20260812_133529.csv'
 
 # Define path
-file_path = '../data/raw/' + file_name
+file_path = '../data/processed/' + file_name
 
 # Convert the CSV file into a Pandas DataFrame
 df = pd.read_csv(file_path)
