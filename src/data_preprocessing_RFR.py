@@ -12,13 +12,13 @@ from csv_changer import CSVChanger
 
 # 1. LOAD DATA
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-df = pd.read_csv(os.path.join(project_root, "data", "raw", "USA_cars_datasets.csv"))
+df = pd.read_csv(os.path.join(project_root, "data", "processed", "USA_cars_datasets_removed.csv"))
 
 # 2. FEATURE CLEANING & DROP IDENTIFIERS
 # Drop index, lot, and vin as they don't carry predictive value
 unwanted_cols = ['Unnamed: 0', 'vin', 'lot']
 df = CSVChanger.load_and_clean_columns(
-    file_path="data/raw/USA_cars_datasets.csv", 
+    file_path="data/processed/USA_cars_datasets_removed.csv", 
     columns_to_drop=['Unnamed: 0', 'vin', 'lot']
 )
 
