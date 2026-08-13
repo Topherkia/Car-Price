@@ -29,7 +29,8 @@ cat_features = ['brand', 'title_status', 'country', 'color', 'state', 'model']
 preprocessor = ColumnTransformer(
     transformers=[
         ('num', StandardScaler(), num_features),
-        ('cat', OneHotEncoder(handle_unknown='infrequent_if_exist', min_frequency=10, sparse_output=False), cat_features)
+        ('cat', OneHotEncoder(handle_unknown='infrequent_if_exist', min_frequency=10, sparse_output=False),
+         cat_features)
     ]
 )
 
@@ -51,15 +52,15 @@ for name, model in regressors.items():
         ('preprocessor', preprocessor),
         ('regressor', model)
     ])
-    
+
     # Train
     pipeline.fit(X_train, y_train)
-    
+
     # Predict & Evaluate
     y_pred = pipeline.predict(X_test)
     r2 = r2_score(y_test, y_pred)
     rmse = root_mean_squared_error(y_test, y_pred)
-    
+
     print(f"=== {name} Performance ===")
     print(f"R2 Score: {r2:.4f}")
     print(f"RMSE: ${rmse:.2f}\n")
