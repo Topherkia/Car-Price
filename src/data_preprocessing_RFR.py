@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.compose import ColumnTransformer
@@ -46,7 +47,11 @@ regressors = {
 }
 
 # Step 7: Train and Compare Models
-for name, model in regressors.items():
+# Set up a master figure and 3 subplots for plotting results (with dark theme)
+plt.style.use('dark_background')
+fig, axes = plt.subplots(1, 3, figsize=(15, 6))
+
+for i, (name, model) in enumerate(regressors.items()):
     pipeline = Pipeline(steps=[
         ('preprocessor', preprocessor),
         ('regressor', model)
@@ -59,7 +64,21 @@ for name, model in regressors.items():
     y_pred = pipeline.predict(X_test)
     r2 = r2_score(y_test, y_pred)
     rmse = root_mean_squared_error(y_test, y_pred)
-    
+
     print(f"=== {name} Performance ===")
     print(f"R2 Score: {r2:.4f}")
     print(f"RMSE: ${rmse:.2f}\n")
+
+    # Plot the evaluation using scatter plot for R-squared
+    min_val = y_test.min()
+    max_val = y_test.max()
+
+    axes[i].scatter(y_test, y_pred, alpha=0.5, color='#A5FF1F')
+    axes[i].plot([min_val, max_val], [min_val, max_val], color='red', linestyle='--')
+    axes[i].set_title(f"{name} (R^2: {r2:.4f})")
+    axes[i].set_xlabel('Actual Prices')
+    axes[i].set_ylabel('Predicted Prices')
+    axes[i].set_facecolor('#1F1F1F')
+
+plt.tight_layout()
+plt.show()
