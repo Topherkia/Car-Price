@@ -3,6 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.impute import SimpleImputer
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.linear_model import LinearRegression
@@ -43,99 +44,239 @@ def preprocess_and_train_models(
     # 1. Feature cleaning
     df = df.copy()
 
-    # Strip leading/trailing whitespaces in string columns
+    # Strip leading/trailing whitespace from string columns.
     str_cols = df.select_dtypes(include=["object"]).columns
     for col in str_cols:
-        df[col] = df[col].str.strip()
+        df[col] = df[col].astype("string").str.strip()
 
-    # Calculate 'car_age' based on current year and drop 'year'
+    # Make the target numeric and remove rows without a usable target.
+    df[target_column] = pd.to_numeric(df[target_column], errors="coerce")
+    df = df.dropna(subset=[target_column]).copy()
+
+    # Remove impossible/non-positive target prices.
+    df = df[df[target_column] > 0].copy()
+
+    # Handle extreme price outliers for training/evaluation.
+    #
+    # The dataset contains an extreme price (around $12.3M) that is not
+    # representative of normal vehicle prices. We use the IQR rule on the
+    # training data only, preventing test-set information from leaking into
+    # model fitting.
+    y_all = df[target_column]
+    q1 = y_all.quantile(0.25)
+    q3 = y_all.quantile(0.75)
+    iqr = q3 - q1
+    lower_price = max(0.0, q1 - 1.5 * iqr)
+    upper_price = q3 + 1.5 * iqr
+
+    # Calculate 'car_age' based on the current year and drop 'year'.
     if "year" in df.columns:
+        df["year"] = pd.to_numeric(df["year"], errors="coerce")
         current_year = int(pd.Timestamp.now().year)
         df["car_age"] = current_year - df["year"]
         df = df.drop(columns=["year"])
 
-    # Drop non-predictive/unnecessary columns if present
-    cols_to_drop = [col for col in ["condition"] if col in df.columns]
-    df = df.drop(columns=cols_to_drop)
+    # Drop non-predictive/unnecessary columns if present.
+    cols_to_drop = [
+        col for col in ["condition", "Unnamed: 0", "vin", "lot"]
+        if col in df.columns
+    ]
+    if cols_to_drop:
+        df = df.drop(columns=cols_to_drop)
 
-    # Separate target and features
+    # Separate target and features.
     X = df.drop(columns=[target_column])
     y = df[target_column]
 
-    # 2. Define feature groups for preprocessing
-    num_features = [col for col in ["mileage", "car_age"] if col in X.columns]
-    cat_features = [
-        col for col in ["brand", "title_status", "country", "color", "state", "model"]
+    # 2. Define feature groups for preprocessing.
+    num_features = [
+        col for col in ["mileage", "car_age"]
         if col in X.columns
     ]
 
-    cat_transformer = OneHotEncoder(
-        handle_unknown="infrequent_if_exist",
-        min_frequency=10,
-        sparse_output=False,
-    )
+    cat_features = [
+        col for col in [
+            "brand",
+            "title_status",
+            "country",
+            "color",
+            "state",
+            "model",
+        ]
+        if col in X.columns
+    ]
+
+    # Numerical missing values -> median.
+    # Categorical missing values -> most frequent value.
+    #
+    # Imputation is inside the sklearn pipeline so the values are learned
+    # only from the training split, avoiding data leakage.
+    num_transformer = Pipeline(steps=[
+        ("imputer", SimpleImputer(strategy="median")),
+        ("scaler", StandardScaler()),
+    ])
+
+    cat_transformer = Pipeline(steps=[
+        ("imputer", SimpleImputer(strategy="most_frequent")),
+        ("onehot", OneHotEncoder(
+            handle_unknown="infrequent_if_exist",
+            min_frequency=10,
+            sparse_output=False,
+        )),
+    ])
 
     preprocessor = ColumnTransformer(
         transformers=[
-            ("num", StandardScaler(), num_features),
+            ("num", num_transformer, num_features),
             ("cat", cat_transformer, cat_features),
-        ]
+        ],
+        remainder="drop",
     )
 
     # 3. Split data
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=test_size, random_state=random_state
+        X,
+        y,
+        test_size=test_size,
+        random_state=random_state,
     )
 
+    # Remove extreme target-price outliers from TRAINING only.
+    # The original test set is retained for an honest evaluation.
+    train_mask = (
+        (y_train >= lower_price)
+        & (y_train <= upper_price)
+    )
 
-    # 4. Define Regressors
+    X_train_clean = X_train.loc[train_mask].copy()
+    y_train_clean = y_train.loc[train_mask].copy()
+
+    removed_train = len(y_train) - len(y_train_clean)
+
+    print("\n=== Dataset Preparation ===")
+    print(f"Total usable rows: {len(df):,}")
+    print(f"Training rows before outlier removal: {len(y_train):,}")
+    print(f"Training outliers removed: {removed_train:,}")
+    print(f"Training rows used: {len(y_train_clean):,}")
+    print(f"Test rows: {len(y_test):,}")
+    print(f"Price IQR bounds: ${lower_price:,.2f} - ${upper_price:,.2f}")
+
+    # 4. Define regressors.
     regressors = {
         "Linear Regression": LinearRegression(),
-        "Decision Tree Regressor": DecisionTreeRegressor(random_state=42),
-        "Random Forest Regressor": RandomForestRegressor(n_estimators=100, random_state=42),
-        "XGBoost Regressor": XGBRegressor(n_estimators=100, learning_rate=0.1, random_state=42)
+        "Decision Tree Regressor": DecisionTreeRegressor(
+            random_state=42
+        ),
+        "Random Forest Regressor": RandomForestRegressor(
+            n_estimators=100,
+            random_state=42,
+            n_jobs=-1,
+        ),
+        "XGBoost Regressor": XGBRegressor(
+            n_estimators=100,
+            learning_rate=0.1,
+            random_state=42,
+            n_jobs=-1,
+        ),
     }
 
     results = {}
 
-    # 5. Train and Compare Models
-    # Set up a master figure and 3 subplots for plotting results (with dark theme)
-    plt.style.use('dark_background')
-    fig, axes = plt.subplots(1, 4, figsize=(15, 6))
+    # 5. Train and compare models.
+    plt.style.use("dark_background")
+    fig, axes = plt.subplots(1, 4, figsize=(18, 6))
+
     for i, (name, model) in enumerate(regressors.items()):
         pipeline = Pipeline(steps=[
-            ('preprocessor', preprocessor),
-            ('regressor', model)
+            ("preprocessor", preprocessor),
+            ("regressor", model),
         ])
 
-        # Train
-        pipeline.fit(X_train, y_train)
+        # Train only on non-extreme target values.
+        pipeline.fit(X_train_clean, y_train_clean)
 
-        # Predict & Evaluate
+        # Predict on the complete untouched test set.
         y_pred = pipeline.predict(X_test)
-        r2 = r2_score(y_test, y_pred)
-        rmse = root_mean_squared_error(y_test, y_pred)
-        mae = mean_absolute_error(y_test, y_pred)
-        mape = mean_absolute_percentage_error(y_test, y_pred)
 
-        results[name] = {"pipeline": pipeline, "R2": r2, "RMSE": rmse, "MAE": mae, "MAPE": mape}
+        # Full test-set metrics.
+        r2_full = r2_score(y_test, y_pred)
+        rmse_full = root_mean_squared_error(y_test, y_pred)
+        mae_full = mean_absolute_error(y_test, y_pred)
+
+        # Robust metrics excluding test-set target outliers.
+        test_mask = (
+            (y_test >= lower_price)
+            & (y_test <= upper_price)
+        )
+
+        y_test_robust = y_test.loc[test_mask]
+        y_pred_robust = y_pred[test_mask.to_numpy()]
+
+        if len(y_test_robust) > 1:
+            r2_robust = r2_score(y_test_robust, y_pred_robust)
+            rmse_robust = root_mean_squared_error(
+                y_test_robust,
+                y_pred_robust,
+            )
+            mae_robust = mean_absolute_error(
+                y_test_robust,
+                y_pred_robust,
+            )
+        else:
+            r2_robust = float("nan")
+            rmse_robust = float("nan")
+            mae_robust = float("nan")
+
+        results[name] = {
+            "pipeline": pipeline,
+            "R2": r2_full,
+            "RMSE": rmse_full,
+            "MAE": mae_full,
+            "R2_robust": r2_robust,
+            "RMSE_robust": rmse_robust,
+            "MAE_robust": mae_robust,
+        }
 
         print(f"=== {name} Performance ===")
-        print(f"R2 Score: {r2:.4f}")
-        print(f"RMSE: ${rmse:.2f}")
-        print(f"MAE: ${mae:.2f}")
-        print(f"MAPE: {mape * 100:.2f}%\n")
+        print(f"Full test set:")
+        print(f"  R²:   {r2_full:.4f}")
+        print(f"  RMSE: ${rmse_full:,.2f}")
+        print(f"  MAE:  ${mae_full:,.2f}")
+        print(f"Robust test set (outliers excluded):")
+        print(f"  R²:   {r2_robust:.4f}")
+        print(f"  RMSE: ${rmse_robust:,.2f}")
+        print(f"  MAE:  ${mae_robust:,.2f}\n")
 
-        # Plot the evaluation using scatter plot for R-squared
-        min_val = y_test.min()
-        max_val = y_test.max()
+        # Plot robust test performance so extreme prices do not flatten it.
+        plot_mask = (
+            (y_test >= lower_price)
+            & (y_test <= upper_price)
+        )
 
-        axes[i].scatter(y_test, y_pred, alpha=0.5, color='#A5FF1F')
-        axes[i].plot([min_val, max_val], [min_val, max_val], color='red', linestyle='--')
-        axes[i].set_title(f"{name} (R^2: {r2:.4f})")
-        axes[i].set_xlabel('Actual Prices')
-        axes[i].set_ylabel('Predicted Prices')
-        axes[i].set_facecolor('#1F1F1F')
+        actual_plot = y_test.loc[plot_mask].to_numpy()
+        pred_plot = y_pred[plot_mask.to_numpy()]
+
+        if len(actual_plot) > 0:
+            min_val = min(actual_plot.min(), pred_plot.min())
+            max_val = max(actual_plot.max(), pred_plot.max())
+
+            axes[i].scatter(
+                actual_plot,
+                pred_plot,
+                alpha=0.5,
+            )
+            axes[i].plot(
+                [min_val, max_val],
+                [min_val, max_val],
+                linestyle="--",
+            )
+
+            axes[i].set_title(
+                f"{name}\nRobust R²: {r2_robust:.4f}"
+            )
+            axes[i].set_xlabel("Actual Prices ($)")
+            axes[i].set_ylabel("Predicted Prices ($)")
+            axes[i].grid(True, linestyle=":", alpha=0.6)
 
     plt.tight_layout()
     plt.show()
