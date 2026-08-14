@@ -2,7 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Define file name
-file_name = 'USA_cars_datasets_processed_removed_20260812_133529.csv'
+file_name = 'USA_cars_datasets_processed_removed.csv'
 
 # Define path
 file_path = '../data/processed/' + file_name
